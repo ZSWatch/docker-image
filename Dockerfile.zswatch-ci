@@ -1,0 +1,54 @@
+# ZSWatch CI Image
+# Based on ci-base, with only the extra bits needed for ZSWatch builds.
+
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE:-ghcr.io/zswatch/ci-base:latest}
+
+ARG USERNAME=user
+ARG WGET_ARGS="-q --show-progress --progress=bar:force:noscroll"
+ARG UBUNTU_MIRROR_ARCHIVE=archive.ubuntu.com/ubuntu
+ARG UBUNTU_MIRROR_SECURITY=security.ubuntu.com/ubuntu
+ARG UBUNTU_MIRROR_PORTS=ports.ubuntu.com/ubuntu-ports
+
+ARG ZSDK_VERSION=0.17.4
+ENV ZSDK_VERSION=$ZSDK_VERSION
+
+# Install minimal extra APT packages required for ZSWatch CI
+RUN <<EOF
+	apt-get update -y
+	apt-get install --no-install-recommends -y \
+		clang-format
+
+	# Clean up local repository
+	apt-get clean -y
+	rm -rf /var/lib/apt/lists/*
+EOF
+
+# Install Zephyr SDK
+RUN <<EOF
+	mkdir -p /opt/toolchains
+	cd /opt/toolchains
+	wget ${WGET_ARGS} https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v${ZSDK_VERSION}/zephyr-sdk-${ZSDK_VERSION}_linux-${HOSTTYPE}.tar.xz
+	tar xf zephyr-sdk-${ZSDK_VERSION}_linux-${HOSTTYPE}.tar.xz
+	zephyr-sdk-${ZSDK_VERSION}/setup.sh -t all -h -c
+	rm zephyr-sdk-${ZSDK_VERSION}_linux-${HOSTTYPE}.tar.xz
+EOF
+
+# Run the Zephyr SDK setup script as 'user' in order to ensure that the
+# `Zephyr-sdk` CMake package is located in the package registry under the
+# user's home directory.
+USER $USERNAME
+
+RUN <<EOF
+	sudo -E -- bash -c '
+	/opt/toolchains/zephyr-sdk-${ZSDK_VERSION}/setup.sh -c &&
+	chown -R $USERNAME:$USERNAME /home/$USERNAME/.cmake
+	'
+EOF
+
+USER root
+
+# Set build environment variables
+ENV ZEPHYR_TOOLCHAIN_VARIANT=zephyr
+ENV PKG_CONFIG_PATH=/usr/lib/i386-linux-gnu/pkgconfig
+ENV OVMF_FD_PATH=/usr/share/ovmf/OVMF.fd

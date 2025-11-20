@@ -7,6 +7,21 @@ This repository contains the Dockerfiles for the following images:
 - **Developer Image (_zephyr-build_):** includes additional tools that can be useful for Zephyr
   development.
 
+## ZSWatch CI usage
+
+For the ZSWatch project, a trimmed CI image is built from `Dockerfile.zswatch-ci` and published to GitHub Container Registry using the workflow `.github/workflows/zswatch-ci-image.yml` in this repository.
+
+- Updating the CI image:
+  - Edit `Dockerfile.base` and/or `Dockerfile.zswatch-ci`.
+  - Push to a branch matching `zswatch_*` (or `main`).
+  - The `Build and publish ZSWatch CI image` workflow builds `ci-base` and `zswatch-ci` and pushes them to `ghcr.io/<namespace>/ci-base:<tag>` and `ghcr.io/<namespace>/zswatch-ci:<tag>`.
+- Using the image in ZSWatch:
+  - In the `ZSWatch` repo, set the job container to the published image, for example:
+    ```yaml
+    container: ghcr.io/<namespace>/zswatch-ci:<tag>
+    ```
+  - The `build.yml` workflow in `ZSWatch` can then reuse this image without rebuilding toolchains on every run.
+
 ## Developer Docker Image
 
 ### Overview

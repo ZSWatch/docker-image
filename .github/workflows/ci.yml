@@ -1,16 +1,10 @@
-name: CI
+name: Upstream CI (disabled in fork)
 
 on:
-  push:
-    branches:
-    - main
-    - v*-branch
-    tags:
-    - v*
-  pull_request:
-    branches:
-    - main
-    - v*-branch
+  # Disabled in this fork to avoid relying on Zephyr's
+  # self-hosted runners and DockerHub credentials.
+  # Kept only for reference and manual runs.
+  workflow_dispatch:
 
 permissions:
   packages: write
