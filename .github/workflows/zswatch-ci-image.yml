@@ -6,6 +6,7 @@ on:
       - main
       - zswatch_*
     paths:
+      - Dockerfile.zswatch-base
       - Dockerfile.zswatch-ci
       - Dockerfile.base
       - Dockerfile.ci
@@ -46,11 +47,11 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.base
+          file: ./Dockerfile.zswatch-base
           push: true
           tags: |
-            ghcr.io/zswatch/ci-base:${{ github.ref_name }}
-            ghcr.io/zswatch/ci-base:latest
+            ghcr.io/zswatch/ci-base-slim:${{ github.ref_name }}
+            ghcr.io/zswatch/ci-base-slim:latest
 
       - name: Prune buildx cache
         run: docker buildx prune -af --keep-storage 5GB
@@ -65,4 +66,4 @@ jobs:
             ghcr.io/zswatch/zswatch-ci:latest
             ghcr.io/zswatch/zswatch-ci:${{ github.ref_name }}
           build-args: |
-            BASE_IMAGE=ghcr.io/zswatch/ci-base:${{ github.ref_name }}
+            BASE_IMAGE=ghcr.io/zswatch/ci-base-slim:${{ github.ref_name }}
