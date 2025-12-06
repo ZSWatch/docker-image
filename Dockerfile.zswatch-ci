@@ -45,6 +45,23 @@ RUN <<'EOF'
 		doxygen \
 		thrift-compiler || true
 
+	apt-get purge --auto-remove -y \
+		libgtk2.0-0 \
+		libcairo2-dev \
+		libglib2.0-dev \
+		libpcap-dev \
+		ovmf \
+		parallel || true
+
+	apt-get clean -y
+	rm -rf /var/lib/apt/lists/*
+	rm -rf /usr/share/doc /usr/share/man /usr/share/info
+EOF
+
+# Reinstall SDL2 dev headers explicitly (native_sim needs sdl2.pc)
+RUN <<EOF
+	apt-get update -y
+	apt-get install --no-install-recommends -y libsdl2-dev
 	apt-get clean -y
 	rm -rf /var/lib/apt/lists/*
 EOF
