@@ -6,6 +6,7 @@ on:
       - main
       - zswatch_*
     paths:
+      - Dockerfile.zswatch-ci
       - Dockerfile.base
       - Dockerfile.ci
       - .github/workflows/zswatch-ci-image.yml
