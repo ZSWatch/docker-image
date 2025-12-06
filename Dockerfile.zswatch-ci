@@ -12,6 +12,9 @@ ARG UBUNTU_MIRROR_PORTS=ports.ubuntu.com/ubuntu-ports
 
 ARG ZSDK_VERSION=0.17.4
 ENV ZSDK_VERSION=$ZSDK_VERSION
+# Limit installed SDK content to the toolchains used by ZSWatch to keep the image lean.
+ARG ZSDK_TOOLCHAINS="arm-zephyr-eabi,x86_64-zephyr-elf"
+ENV ZSDK_TOOLCHAINS=$ZSDK_TOOLCHAINS
 
 # Install minimal extra APT packages required for ZSWatch CI
 RUN <<EOF
@@ -24,14 +27,43 @@ RUN <<EOF
 	rm -rf /var/lib/apt/lists/*
 EOF
 
+# Remove large tooling from ci-base that ZSWatch does not need (keeps image small)
+RUN <<'EOF'
+	if [ "${HOSTTYPE}" = "x86_64" ]; then
+		# Drop 32-bit support and multilib toolchains not needed for nRF/native_sim_64
+		apt-get purge --auto-remove -y \
+			gcc-multilib g++-multilib \
+			libc6-dbg:i386 libfuse-dev:i386 libsdl2-dev:i386 || true
+		dpkg --remove-architecture i386 || true
+	fi
+
+	# Remove heavy debug/coverage/doc tools unused in ZSWatch CI builds
+	apt-get purge --auto-remove -y \
+		valgrind \
+		lcov \
+		gcovr \
+		doxygen \
+		thrift-compiler || true
+
+	apt-get clean -y
+	rm -rf /var/lib/apt/lists/*
+EOF
+
 # Install Zephyr SDK
 RUN <<EOF
 	mkdir -p /opt/toolchains
 	cd /opt/toolchains
 	wget ${WGET_ARGS} https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v${ZSDK_VERSION}/zephyr-sdk-${ZSDK_VERSION}_linux-${HOSTTYPE}.tar.xz
 	tar xf zephyr-sdk-${ZSDK_VERSION}_linux-${HOSTTYPE}.tar.xz
-	zephyr-sdk-${ZSDK_VERSION}/setup.sh -t all -h -c
+	# Convert comma/space separated toolchain list into repeated -t flags (required by setup.sh)
+	set --
+	for toolchain in $(printf '%s' "$ZSDK_TOOLCHAINS" | tr ',' ' '); do
+		set -- "$@" -t "$toolchain"
+	done
+	set -- "$@" -h -c
+	zephyr-sdk-${ZSDK_VERSION}/setup.sh "$@"
 	rm zephyr-sdk-${ZSDK_VERSION}_linux-${HOSTTYPE}.tar.xz
+	find zephyr-sdk-${ZSDK_VERSION}/sysroots -maxdepth 4 -type d \( -name doc -o -name man -o -name info \) -exec rm -rf '{}' +
 EOF
 
 # Run the Zephyr SDK setup script as 'user' in order to ensure that the
