@@ -1,0 +1,122 @@
+# ZSWatch slim base image
+# Minimal tooling for nRF5340 and native_sim builds; omits extras from the upstream base.
+
+FROM ubuntu:24.04
+
+ARG USERNAME=user
+ARG UID=1000
+ARG GID=1000
+ARG PYTHON_VENV_PATH=/opt/python/venv
+ARG UBUNTU_MIRROR_ARCHIVE=archive.ubuntu.com/ubuntu
+ARG UBUNTU_MIRROR_SECURITY=security.ubuntu.com/ubuntu
+ARG UBUNTU_MIRROR_PORTS=ports.ubuntu.com/ubuntu-ports
+
+# Set default shell during Docker image build to bash
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+# Set non-interactive frontend for apt-get to skip any user confirmations
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install a trimmed set of APT packages
+RUN <<EOF
+	# Set up custom Ubuntu APT mirrors
+	pushd /etc/apt/sources.list.d
+	cp ubuntu.sources ubuntu.sources.bak
+	sed -i "s#archive.ubuntu.com/ubuntu#${UBUNTU_MIRROR_ARCHIVE}#" ubuntu.sources
+	sed -i "s#security.ubuntu.com/ubuntu#${UBUNTU_MIRROR_SECURITY}#" ubuntu.sources
+	sed -i "s#ports.ubuntu.com/ubuntu-ports#${UBUNTU_MIRROR_PORTS}#" ubuntu.sources
+	popd
+
+	apt-get -y update
+
+	# Core build and tooling stack
+	apt-get install --no-install-recommends -y \
+		build-essential \
+		ca-certificates \
+		ccache \
+		cmake \
+		dfu-util \
+		device-tree-compiler \
+		file \
+		gdb \
+		git \
+		gperf \
+		libffi-dev \
+		libncursesw6 \
+		libreadline8 \
+		libssl-dev \
+		libusb-1.0-0 \
+		libyaml-0-2 \
+		libsdl2-dev \
+		locales \
+		ninja-build \
+		openssh-client \
+		pkg-config \
+		python3 \
+		python3-dev \
+		python3-pip \
+		python3-setuptools \
+		python3-wheel \
+		python3-venv \
+		python-is-python3 \
+		sudo \
+		unzip \
+		wget \
+		xz-utils
+
+	apt-get autoremove --purge -y
+	apt-get clean -y
+	rm -rf /var/lib/apt/lists/*
+
+	# Restore original Ubuntu mirrors
+	pushd /etc/apt/sources.list.d
+	mv -f ubuntu.sources.bak ubuntu.sources
+	popd
+EOF
+
+# Initialise system locale
+RUN locale-gen en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV LC_ALL=en_US.UTF-8
+
+# Set up Python virtual environment for Zephyr
+RUN <<EOF
+	mkdir -p ${PYTHON_VENV_PATH}
+	python3 -m venv ${PYTHON_VENV_PATH}
+	source ${PYTHON_VENV_PATH}/bin/activate
+
+	pip install --no-cache-dir --upgrade pip setuptools wheel
+	pip install --no-cache-dir \
+		-r https://raw.githubusercontent.com/zephyrproject-rtos/zephyr/main/scripts/requirements.txt \
+		-r https://raw.githubusercontent.com/zephyrproject-rtos/mcuboot/main/scripts/requirements.txt \
+		'esptool>=5.0.2' \
+		GitPython \
+		imgtool \
+		junitparser \
+		junit2html \
+		nrf-regtool~=9.0.1 \
+		numpy \
+		protobuf \
+		grpcio-tools \
+		PyGithub \
+		pylint \
+		sh \
+		statistics \
+		west
+EOF
+
+# Make Zephyr Python virtual environment available globally
+ENV PATH=${PYTHON_VENV_PATH}/bin:$PATH
+
+# Create user account
+RUN <<EOF
+	userdel -r ubuntu || true
+	groupadd -g $GID -o $USERNAME
+	useradd -u $UID -m -g $USERNAME -G plugdev $USERNAME
+	echo $USERNAME ' ALL = NOPASSWD: ALL' > /etc/sudoers.d/$USERNAME
+	chmod 0440 /etc/sudoers.d/$USERNAME
+EOF
+
+# Ensure that container runs in the 'root' user context
+USER root
